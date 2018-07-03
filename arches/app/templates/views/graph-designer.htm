@@ -156,7 +156,13 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
                 </div>
                 
                 <!-- Card Manager -->
-                <div class="tab-pane fade in" data-bind="css: { active: activeTab() === 'card' }"></div>
+                <div class="tab-pane fade in" data-bind="css: { active: activeTab() === 'card' }">
+                    <!--Widget Manager -->
+                    <div id="widget-configuration" class="middle-column-container graph-designer widget-configuration" style="width: 300px; border-bottom: solid 1px #dddddd; z-index: 10;">
+                        {% include 'views/graph/graph-designer/widget-configuration.htm' %}
+                    </div>
+                    sda
+                </div>
             </div>
         </div>
 

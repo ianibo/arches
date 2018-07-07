@@ -8,7 +8,8 @@ define([
     'bindings/related-resources-graph',
     'plugins/knockout-select2',
     'bindings/datepicker',
-    'bindings/datatable'
+    'bindings/datatable',
+    'views/components/resource-instance-search'
 ], function($, Backbone, ko, koMapping, arches, RelatedResourcesNodeList) {
     return Backbone.View.extend({
         initialize: function(options) {
@@ -175,7 +176,8 @@ define([
                     },
                     get: function(newPage) {
                         var page = newPage || 1
-                        $.ajax({
+                        if (resourceinstanceid) {
+                            $.ajax({
                                 url: arches.urls.related_resources + resourceinstanceid,
                                 context: this,
                                 dataType: 'json',
@@ -191,6 +193,7 @@ define([
                             .fail(function(data) {
                                 console.log('Related resource request failed', data)
                             });
+                        }
                     },
                     save: function(candidateIds, relationshipProperties, relationshipIds) {
                         var root_resourceinstanceid = resourceinstanceid;

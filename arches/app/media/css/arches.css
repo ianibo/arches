@@ -7827,6 +7827,25 @@ div.row.widget-wrapper.report-header:hover {
     border-color: #aaa;
 }
 
+.resource-search-input {
+    position: absolute;
+    top: 35px;
+    left: 25px;
+    padding: 0px;
+    background: #fff;
+    opacity: .9;
+    width: 250px;
+    height: 36px;
+    border-radius: 2px;
+    transition: all .450s ease;
+    z-index: 10;
+    visibility: hidden;
+}
+
+.resource-search-input input {
+    border-color: #aaa;
+}
+
 .geometry-editing-notifications {
     position: absolute;
     top: 0px;

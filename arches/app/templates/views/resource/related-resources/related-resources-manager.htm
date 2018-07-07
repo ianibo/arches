@@ -109,6 +109,18 @@
                 </div>
 
                 <div class="relative">
+                    <div class="resource-search-input" style="visibility: visible" data-bind="css : {
+                        'geocode-container-shim': true,
+                        'hide-geocoder': false
+                    }">
+                    <!-- ko component: {
+                        name: 'views/components/resource-instance-search',
+                        params: {
+                            placeholder: 'test'
+                        }
+                    } -->
+                    <!-- /ko -->
+                    </div>
 
                     <!--Documentation dropdown-->
                     <!--ko if: resourceEditorContext -->

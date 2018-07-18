@@ -5,6 +5,7 @@ import shutil
 import urllib2
 import zipfile
 import datetime
+import re
 from arches import settings
 
 here = os.path.dirname(os.path.abspath(__file__))
@@ -47,7 +48,10 @@ def confirm_system_requirements():
     except OSError:
         print('ERROR: Arches requires psql. Please install and then rerun this file again.')
         sys.exit(101)
-    if postgres_version.find("9.") == -1:
+    version_number_start = re.search("\d", postgres_version).start()
+    version_number_period = re.search("\.", postgres_version).start()
+    version_number_string = postgres_version[version_number_start:version_number_period]
+    if int(version_number_string) < 9:
         print('ERROR: Arches requires Postgres 9.0 or greater')
         print('Version detected: %s\n' % (postgres_version))
         postgres_override = raw_input('Would like to continue anyway?\nPress Y for Yes or N for No:')

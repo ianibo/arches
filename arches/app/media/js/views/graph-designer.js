@@ -6,6 +6,7 @@ define([
     'views/base-manager',
     'viewmodels/alert',
     'models/graph',
+    'models/report',
     'views/graph/graph-manager/graph',
     'views/graph/graph-designer/graph-tree',
     'views/graph/graph-designer/node-form',
@@ -15,10 +16,13 @@ define([
     'graph-designer-data',
     'arches',
     'viewmodels/graph-settings',
+    'viewmodels/card',
     'view-data',
+    'report-templates',
     'bindings/resizable-sidepanel',
-    'datatype-config-components'
-], function($, _, ko, koMapping, BaseManagerView, AlertViewModel, GraphModel, GraphView, GraphTree, NodeFormView, BranchListView, CardTreeViewModel, PermissionDesigner, data, arches, GraphSettingsViewModel, viewData) {
+    'datatype-config-components',
+    'views/components/simple-switch'
+], function($, _, ko, koMapping, BaseManagerView, AlertViewModel, GraphModel, ReportModel, GraphView, GraphTree, NodeFormView, BranchListView, CardTreeViewModel, PermissionDesigner, data, arches, GraphSettingsViewModel, CardViewModel, viewData, reportLookup) {
     var GraphDesignerView = BaseManagerView.extend({
 
         initialize: function(options) {
@@ -26,10 +30,12 @@ define([
             viewModel.graphid = ko.observable(data.graphid);
             viewModel.activeTab = ko.observable('graph');
             viewModel.viewState = ko.observable('design');
+            viewModel.helpTemplate(viewData.help);
             viewModel.graphSettingsVisible = ko.observable(false);
             viewModel.graph = koMapping.fromJS(data['graph']);
             viewModel.ontologies = ko.observable(data['ontologies']);
             viewModel.ontologyClasses = ko.observable(data['ontologyClasses']);
+            viewModel.cardComponents = data.cardComponents;
 
             var resources = ko.utils.arrayFilter(viewData.graphs, function(graph) {
                 return graph.isresource;
@@ -38,6 +44,11 @@ define([
                 return !graph.isresource;
             });
 
+            viewModel.graph.ontology = ko.computed(function() {
+                return viewModel.ontologies().find(function(obj) {
+                    return obj.ontologyid === viewModel.graph.ontology_id();
+                });
+            });
             viewModel.groupedGraphs = ko.observable({
                 groups: [
                     { name: 'Resource Models', items: resources },
@@ -56,6 +67,8 @@ define([
                 datatypes: data.datatypes,
                 ontology_namespaces: data.ontology_namespaces
             });
+
+            viewModel.datatypes = _.keys(viewModel.graphModel.get('datatypelookup'));
 
             viewModel.graphModel.on('changed', function(model, response) {
                 if (viewModel.graphView) {
@@ -85,18 +98,22 @@ define([
                 if (node) {
                     viewModel.loading(true);
                     node.save(function(data) {
-                        if (!data.responseJSON.success) {
+                        if (data.responseJSON.success === false || data.status === 500) {
                             viewModel.alert(new AlertViewModel('ep-alert-red', data.responseJSON.title, data.responseJSON.message));
+                        }
+                        else {
+                            viewModel.cardTree.updateCards('update', viewModel.selectedNode().nodeGroupId(), data.responseJSON);
+                            viewModel.permissionTree.updateCards('update', viewModel.selectedNode().nodeGroupId(), data.responseJSON);
                         }
                         viewModel.loading(false);
                     });
-                };
+                }
             };
 
             viewModel.saveSelectedNode = function() {
                 if (viewModel.selectedNode()) {
                     viewModel.saveNode(viewModel.selectedNode());
-                };
+                }
             };
 
             viewModel.cardTree = new CardTreeViewModel({
@@ -104,11 +121,42 @@ define([
                 graphModel: viewModel.graphModel
             });
 
+            viewModel.permissionTree = new CardTreeViewModel({
+                graph: viewModel.graph,
+                graphModel: viewModel.graphModel,
+                multiselect: true
+            });
+
+            viewModel.selectedCards = ko.computed(function() {
+                var selection = viewModel.permissionTree.selection();
+                if (selection) {
+                    if (selection.widgets) {
+                        return selection;
+                    }
+                    return selection.parent;
+                } else {
+                    return null;
+                }
+            });
+
+            viewModel.selectedCard = ko.computed(function() {
+                var selection = viewModel.cardTree.selection();
+                if (selection) {
+                    if (selection.widgets) {
+                        return selection;
+                    }
+                    return selection.parent;
+                } else {
+                    return null;
+                }
+            });
+
             viewModel.nodeForm = new NodeFormView({
                 graph: viewModel.graph,
                 graphModel: viewModel.graphModel,
                 loading: viewModel.loading,
-                node: viewModel.selectedNode
+                node: viewModel.selectedNode,
+                restrictedNodegroups: data.restrictedNodegroups
             });
 
             viewModel.branchListView = new BranchListView({
@@ -122,7 +170,7 @@ define([
             });
 
             viewModel.permissionsDesigner = new PermissionDesigner({
-                cardTree: viewModel.cardTree
+                cardTree: viewModel.permissionTree
             });
 
             viewModel.graphSettingsViewModel = new GraphSettingsViewModel({
@@ -135,12 +183,42 @@ define([
                 iconFilter: ko.observable(''),
                 node: viewModel.selectedNode,
                 rootNodeColor: ko.observable(''),
-                ontology_namespaces: data.ontology_namespaces
+                "ontology_namespaces": data.ontology_namespaces,
+                onReset: function() {
+                    var graph = ko.mapping.toJS(viewModel.graphSettingsViewModel.graph);
+                    viewModel.report.configJSON(graph.config);
+                    viewModel.report.get('template_id')(graph["template_id"]);
+                }
+            });
+
+            viewModel.report = new ReportModel(_.extend(data, {
+                graphModel: viewModel.graphModel,
+                cards: viewModel.cardTree.topCards,
+                preview: true
+            }));
+
+            viewModel.report.configJSON.subscribe(function(config) {
+                var graph = ko.mapping.toJS(viewModel.graphSettingsViewModel.graph);
+                graph.config = config;
+                ko.mapping.fromJS(graph, viewModel.graphSettingsViewModel.graph);
+            });
+
+            viewModel.report.get('template_id').subscribe(function(val) {
+                viewModel.graphSettingsViewModel.graph["template_id"](val);
+            });
+
+            viewModel.reportLookup = reportLookup;
+            viewModel.reportTemplates = _.map(reportLookup, function(report, id) {
+                report.id = id;
+                return report;
             });
 
             viewModel.graphTree = new GraphTree({
                 graphModel: viewModel.graphModel,
-                graphSettings: viewModel.graphSettingsViewModel
+                graphSettings: viewModel.graphSettingsViewModel,
+                cardTree: viewModel.cardTree,
+                permissionTree: viewModel.permissionTree,
+                restrictedNodegroups: data.restrictedNodegroups
             });
 
             viewModel.graphTree.branchListVisible.subscribe(function(visible) {
@@ -154,7 +232,7 @@ define([
                 viewModel.loading(true);
                 $.ajax({
                     type: 'GET',
-                    url: arches.urls.new_graph_settings(data.graphid),
+                    url: arches.urls.graph_settings(data.graphid),
                     data: {'search': true, 'csrfmiddlewaretoken': '{{ csrf_token }}'}})
                     .done(function(data) {
                         self.graphSettingsViewModel.resource_data(data.resources);
@@ -165,53 +243,155 @@ define([
                         viewModel.loading(false);
                     })
                     .fail(function() {
-                        console.log('error');
+                        throw 'error loading graph settings';
                     });
             };
+
+            var correspondingCard = function(item, cardTree){
+                var cardList = cardTree.cachedFlatTree;
+                if (cardList === undefined) {
+                    var cardList = cardTree.flattenTree(cardTree.topCards(), []);
+                    cardTree.cachedFlatTree = cardList;
+                }
+                var res;
+                var matchingWidget;
+                if (item && typeof item !== 'string') {
+                    if (item.nodeGroupId) { //if the item is a node in graph tree
+                        var matchingCards = _.filter(cardList, function(card){
+                            return card.nodegroupid === item.nodeGroupId();
+                        });
+                        _.each(matchingCards, function(card){
+                            var match;
+                            match = _.find(card.widgets(), function(widget){
+                                return widget.node_id() === item.nodeid;
+                            });
+                            if (match) {
+                                matchingWidget = match;
+                            }
+                        });
+                        if (matchingWidget) {
+                            res = matchingWidget;
+                        } else {
+                            res = matchingCards[0];
+                        }
+                    } else { //if the item is a card or widget in the card tree
+                        res = _.find(cardList, function(card){
+                            if (item.nodegroupid) {
+                                return card.nodegroupid === item.nodegroupid;
+                            } else {
+                                return card.nodegroupid === item.node.nodeGroupId();
+                            }
+                        });
+                    }
+                }
+                return res;
+
+            };
+
+            var correspondingNode = function(card, graphTree){
+                var nodeMatch = _.find(graphTree.items(), function(node){
+                    if (card.node) {
+                        return node.nodeid === card.node_id();
+                    } else {
+                        return node.nodeGroupId() === card.nodegroupid && node.nodeid === node.nodeGroupId();
+                    }
+                });
+                return nodeMatch;
+            };
+
+            var updateGraphSelection = function() {
+                if (viewModel.activeTab() === 'card') {
+                    viewModel.graphTree.collapseAll();
+                    var matchingNode = correspondingNode(viewModel.cardTree.selection(), viewModel.graphTree);
+                    if (matchingNode) {
+                        viewModel.graphTree.selectItem(matchingNode);
+                    }
+                }
+            };
+
+            var updateCardSelection = function() {
+                if (viewModel.activeTab() === 'graph') {
+                    var graphTreeSelection = viewModel.graphTree.selectedItems().length > 0 ? viewModel.graphTree.selectedItems()[0] : null;
+                    var matchingCard;
+                    if (graphTreeSelection) {
+                        if (graphTreeSelection.istopnode === true) {
+                            viewModel.cardTree.selection(viewModel.cardTree.topCards()[0]);
+                        } else {
+                            matchingCard = correspondingCard(graphTreeSelection, viewModel.cardTree);
+                            if (matchingCard) {
+                                viewModel.cardTree.selection(matchingCard);
+                                viewModel.cardTree.collapseAll();
+                                viewModel.cardTree.expandToRoot(viewModel.cardTree.selection());
+                            }
+                        }
+                    }
+                }
+            };
+
+            var updatePermissionCardSelection = function() {
+                var matchingCard = correspondingCard(viewModel.cardTree.selection(), viewModel.permissionTree);
+                if (matchingCard) {
+                    viewModel.permissionTree.collapseAll();
+                    viewModel.permissionTree.expandToRoot(matchingCard);
+                    viewModel.permissionTree.selection.removeAll();
+                    matchingCard.selected(true);
+                }
+            };
+
+            viewModel.cardTree.selection.subscribe(function(){
+                updateGraphSelection();
+                updatePermissionCardSelection();
+            });
+
+            viewModel.graphTree.selectedItems.subscribe(function(){
+                updateCardSelection();
+                updatePermissionCardSelection();
+            });
 
             if (viewModel.activeTab() === 'graph') {
                 viewModel.loadGraphSettings();
                 // here we might load data/views asyncronously
-            };
+            }
 
             var loadPermissionData = viewModel.activeTab.subscribe(function(tab) {
                 // Loads identities and nodegroup permissions when the permissions tab is opened and then disposes the ko.subscribe.
                 if (tab === 'permissions') {
                     viewModel.permissionsDesigner.getPermissionManagerData();
                     loadPermissionData.dispose();
-                };
+                }
+            });
+
+            var helpContentLookup = {
+                permissions: 'permissions-manager-help',
+                graph: 'graph-designer-help',
+                card: 'card-manager-help'
+            };
+
+            viewModel.activeTab.subscribe(function(tab) {
+                viewModel.helpTemplate(helpContentLookup[tab]);
+                viewModel.getHelp();
+            });
+
+            viewModel.graphView = new GraphView({
+                el: $('#graph'),
+                graphModel: viewModel.graphModel,
+                nodeSize: 15,
+                nodeSizeOver: 20,
+                labelOffset: 10,
+                loading: this.loading
+            });
+
+            viewModel.graphModel.on('select-node', function(node) {
+                viewModel.graphView.zoomTo(node);
+                viewModel.graphTree.expandParentNode(node);
             });
 
             viewModel.viewState.subscribe(function(state) {
-                if (state === 'design') {
-
-                }
                 if (state === 'preview') {
-                    if (!viewModel.graphView) {
-                        viewModel.graphView = new GraphView({
-                            el: $('#graph'),
-                            graphModel: viewModel.graphModel,
-                            nodeSize: 15,
-                            nodeSizeOver: 20,
-                            labelOffset: 10,
-                            loading: this.loading
-                        });
-
-                        viewModel.graphView.resize();
-
-                        viewModel.graphModel.on('select-node', function(node) {
-                            viewModel.graphView.zoomTo(node);
-                            viewModel.graphTree.expandParentNode(node);
-                        });
-                    }
+                    viewModel.graphView.resize();
                 }
             });
 
-            if (viewModel.viewState() === 'design') {
-                // here we might load data/views asyncronously
-            } else {
-
-            }
 
             /**
             * update the sizing of elements on window resize

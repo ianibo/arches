@@ -29,7 +29,6 @@ from django.views.generic import View
 from django.forms.models import model_to_dict
 from django.template.loader import render_to_string
 from arches.app.models import models
-from arches.app.models.forms import Form
 from arches.app.models.card import Card
 from arches.app.models.graph import Graph
 from arches.app.models.tile import Tile
@@ -47,8 +46,10 @@ from arches.app.views.concept import Concept
 from arches.app.datatypes.datatypes import DataTypeFactory
 from elasticsearch import Elasticsearch
 
+
 @method_decorator(can_edit_resource_instance(), name='dispatch')
 class ResourceListView(BaseManagerView):
+
     def get(self, request, graphid=None, resourceid=None):
         context = self.get_context_data(
             main_script='views/resource',
@@ -57,10 +58,11 @@ class ResourceListView(BaseManagerView):
         context['nav']['icon'] = "fa fa-bookmark"
         context['nav']['title'] = _("Resource Manager")
         context['nav']['login'] = True
-        context['nav']['help'] = (_('Creating Resources'),'help/base-help.htm')
+        context['nav']['help'] = (_('Creating Resources'), 'help/base-help.htm')
         context['help'] = 'resource-editor-landing-help'
 
         return render(request, 'views/resource.htm', context)
+
 
 def get_resource_relationship_types():
     resource_relationship_types = Concept().get_child_collections('00000000-0000-0000-0000-000000000005')
@@ -68,7 +70,8 @@ def get_resource_relationship_types():
     for relationship_type in resource_relationship_types:
         if relationship_type[0] == '00000000-0000-0000-0000-000000000007':
             default_relationshiptype_valueid = relationship_type[2]
-    relationship_type_values = {'values':[{'id':str(c[2]), 'text':str(c[1])} for c in resource_relationship_types], 'default': str(default_relationshiptype_valueid)}
+    relationship_type_values = {'values': [{'id': str(c[2]), 'text':str(
+        c[1])} for c in resource_relationship_types], 'default': str(default_relationshiptype_valueid)}
     return relationship_type_values
 
 
@@ -88,13 +91,17 @@ class NewResourceEditorView(MapBaseManagerView):
             resource_instance = Resource.objects.get(pk=resourceid)
             graph = resource_instance.graph
         nodes = graph.node_set.all()
-        resource_graphs = models.GraphModel.objects.exclude(pk=settings.SYSTEM_SETTINGS_RESOURCE_MODEL_ID).exclude(isresource=False).exclude(isactive=False)
+        resource_graphs = models.GraphModel.objects.exclude(
+            pk=settings.SYSTEM_SETTINGS_RESOURCE_MODEL_ID).exclude(isresource=False).exclude(isactive=False)
         ontologyclass = [node for node in nodes if node.istopnode is True][0].ontologyclass
         relationship_type_values = get_resource_relationship_types()
-        nodegroups = [node.nodegroup for node in nodes if node.is_collector and request.user.has_perm('write_nodegroup', node.nodegroup)]
+        nodegroups = [node.nodegroup for node in nodes if node.is_collector and request.user.has_perm(
+            'write_nodegroup', node.nodegroup)]
         nodes = nodes.filter(nodegroup__in=nodegroups)
-        cards = graph.cardmodel_set.order_by('sortorder').filter(nodegroup__in=nodegroups).prefetch_related('cardxnodexwidget_set')
-        cardwidgets = [widget for widgets in [card.cardxnodexwidget_set.order_by('sortorder').all() for card in cards] for widget in widgets]
+        cards = graph.cardmodel_set.order_by('sortorder').filter(
+            nodegroup__in=nodegroups).prefetch_related('cardxnodexwidget_set')
+        cardwidgets = [widget for widgets in [card.cardxnodexwidget_set.order_by(
+            'sortorder').all() for card in cards] for widget in widgets]
         widgets = models.Widget.objects.all()
         card_components = models.CardComponent.objects.all()
         datatypes = models.DDataType.objects.all()
@@ -122,10 +129,12 @@ class NewResourceEditorView(MapBaseManagerView):
                             tile.data = tile.provisionaledits[str(request.user.id)]['value']
                         else:
                             if isfullyprovisional == True:
-                                #if the tile IS fully provisional and the current user is not the owner, we don't send that tile back to the client.
+                                # if the tile IS fully provisional and the current user is not the owner,
+                                # we don't send that tile back to the client.
                                 append_tile = False
                             else:
-                                #if the tile has authoritaive data and the current user is not the owner, we don't send the provisional data of other users back to the client.
+                                # if the tile has authoritaive data and the current user is not the owner,
+                                # we don't send the provisional data of other users back to the client.
                                 tile.provisionaledits = None
                 if append_tile == True:
                     provisionaltiles.append(tile)
@@ -135,6 +144,7 @@ class NewResourceEditorView(MapBaseManagerView):
         map_markers = models.MapMarker.objects.all()
         map_sources = models.MapSource.objects.all()
         geocoding_providers = models.Geocoder.objects.all()
+        templates = models.ReportTemplate.objects.all()
 
         context = self.get_context_data(
             main_script=main_script,
@@ -159,9 +169,11 @@ class NewResourceEditorView(MapBaseManagerView):
             map_layers=map_layers,
             map_markers=map_markers,
             map_sources=map_sources,
-            geocoding_providers = geocoding_providers,
-            active_report_count = models.Report.objects.filter(graph=graph, active=True).count(),
+            geocoding_providers=geocoding_providers,
             user_is_reviewer=json.dumps(user_is_reviewer),
+            report_templates=templates,
+            templates_json=JSONSerializer().serialize(templates, sort_keys=False, exclude=['name', 'description']),
+            graph_json=JSONSerializer().serialize(graph),
         )
 
         context['nav']['title'] = ''
@@ -186,6 +198,7 @@ class NewResourceEditorView(MapBaseManagerView):
 @method_decorator(can_edit_resource_instance(), name='dispatch')
 class ResourceEditorView(MapBaseManagerView):
     action = None
+
     def get(self, request, graphid=None, resourceid=None, view_template='views/resource/editor.htm', main_script='views/resource/editor', nav_menu=True):
         if self.action == 'copy':
             return self.copy(request, resourceid)
@@ -208,24 +221,17 @@ class ResourceEditorView(MapBaseManagerView):
                 html = render_to_string('views/search/search-base-manager.htm', {}, request)
                 return HttpResponse(html)
 
-            resource_graphs = models.GraphModel.objects.exclude(pk=settings.SYSTEM_SETTINGS_RESOURCE_MODEL_ID).exclude(isresource=False).exclude(isactive=False)
+            resource_graphs = models.GraphModel.objects.exclude(
+                pk=settings.SYSTEM_SETTINGS_RESOURCE_MODEL_ID).exclude(isresource=False).exclude(isactive=False)
             graph = Graph.objects.get(graphid=graphid)
             relationship_type_values = get_resource_relationship_types()
-            form = Form(resource_instance.pk)
             datatypes = models.DDataType.objects.all()
             widgets = models.Widget.objects.all()
             map_layers = models.MapLayer.objects.all()
             map_markers = models.MapMarker.objects.all()
             map_sources = models.MapSource.objects.all()
             geocoding_providers = models.Geocoder.objects.all()
-            forms = graph.form_set.filter(visible=True)
-            forms_x_cards = models.FormXCard.objects.filter(form__in=forms)
-            forms_w_cards = []
             required_widgets = []
-
-            for form_x_card in forms_x_cards:
-                if request.user.has_perm('read_nodegroup', form_x_card.card.nodegroup):
-                    forms_w_cards.append(form_x_card.form)
 
             widget_datatypes = [v.datatype for k, v in graph.nodes.iteritems()]
             widgets = widgets.filter(datatype__in=widget_datatypes)
@@ -237,18 +243,16 @@ class ResourceEditorView(MapBaseManagerView):
             else:
                 displayname = 'Unnamed Resource'
 
-
             date_nodes = models.Node.objects.filter(datatype='date', graph__isresource=True, graph__isactive=True)
             searchable_datatypes = [d.pk for d in models.DDataType.objects.filter(issearchable=True)]
-            searchable_nodes = models.Node.objects.filter(graph__isresource=True, graph__isactive=True, datatype__in=searchable_datatypes, issearchable=True)
+            searchable_nodes = models.Node.objects.filter(
+                graph__isresource=True, graph__isactive=True, datatype__in=searchable_datatypes, issearchable=True)
             resource_cards = models.CardModel.objects.filter(graph__isresource=True, graph__isactive=True)
             context = self.get_context_data(
                 main_script=main_script,
                 resource_type=graph.name,
                 relationship_types=relationship_type_values,
                 iconclass=graph.iconclass,
-                form=JSONSerializer().serialize(form),
-                forms=JSONSerializer().serialize(forms_w_cards),
                 datatypes_json=JSONSerializer().serialize(datatypes, exclude=['iconclass', 'modulename', 'classname']),
                 datatypes=datatypes,
                 widgets=widgets,
@@ -256,18 +260,20 @@ class ResourceEditorView(MapBaseManagerView):
                 map_layers=map_layers,
                 map_markers=map_markers,
                 map_sources=map_sources,
-                geocoding_providers = geocoding_providers,
+                geocoding_providers=geocoding_providers,
                 widgets_json=JSONSerializer().serialize(widgets),
                 resourceid=resourceid,
                 resource_graphs=resource_graphs,
-                graph_json=JSONSerializer().serialize(graph, exclude=['iconclass', 'functions', 'functions_x_graphs', 'name', 'description', 'deploymentfile', 'author', 'deploymentdate', 'version', 'isresource', 'isactive', 'iconclass', 'ontology']),
+                graph_json=JSONSerializer().serialize(graph, exclude=['iconclass', 'functions', 'functions_x_graphs', 'name', 'description',
+                                                                      'deploymentfile', 'author', 'deploymentdate', 'version', 'isresource', 'isactive', 'iconclass', 'ontology']),
                 displayname=displayname,
-                resource_cards=JSONSerializer().serialize(resource_cards, exclude=['description','instructions','active','isvisible']),
-                searchable_nodes=JSONSerializer().serialize(searchable_nodes, exclude=['description', 'ontologyclass','isrequired', 'issearchable', 'istopnode']),
+                resource_cards=JSONSerializer().serialize(resource_cards, exclude=[
+                    'description', 'instructions', 'active', 'isvisible']),
+                searchable_nodes=JSONSerializer().serialize(searchable_nodes, exclude=[
+                    'description', 'ontologyclass', 'isrequired', 'issearchable', 'istopnode']),
                 saved_searches=JSONSerializer().serialize(settings.SAVED_SEARCHES),
                 resource_instance_exists=resource_instance_exists,
                 user_is_reviewer=json.dumps(request.user.groups.filter(name='Resource Reviewer').exists()),
-                active_report_count = models.Report.objects.filter(graph_id=resource_instance.graph_id, active=True).count(),
                 userid=request.user.id
             )
 
@@ -276,12 +282,11 @@ class ResourceEditorView(MapBaseManagerView):
             context['nav']['title'] = graph.name
             context['nav']['menu'] = nav_menu
             if resourceid == settings.RESOURCE_INSTANCE_ID:
-                context['nav']['help'] = (_('Managing System Settings'),'help/base-help.htm')
+                context['nav']['help'] = (_('Managing System Settings'), 'help/base-help.htm')
                 context['help'] = 'system-settings-help'
             else:
-                context['nav']['help'] = (_('Using the Resource Editor'),'help/base-help.htm')
+                context['nav']['help'] = (_('Using the Resource Editor'), 'help/base-help.htm')
                 context['help'] = 'resource-editor-help'
-
 
             return render(request, view_template, context)
 
@@ -302,6 +307,7 @@ class ResourceEditorView(MapBaseManagerView):
 
 @method_decorator(can_edit_resource_instance(), name='dispatch')
 class ResourceEditLogView(BaseManagerView):
+
     def getEditConceptValue(self, values):
         if values != None:
             for k, v in values.iteritems():
@@ -323,9 +329,10 @@ class ResourceEditLogView(BaseManagerView):
 
     def get(self, request, resourceid=None, view_template='views/resource/edit-log.htm'):
         if resourceid is None:
-            recent_edits = models.EditLog.objects.all().exclude(resourceclassid=settings.SYSTEM_SETTINGS_RESOURCE_MODEL_ID).order_by('-timestamp')[:100]
+            recent_edits = models.EditLog.objects.all().exclude(
+                resourceclassid=settings.SYSTEM_SETTINGS_RESOURCE_MODEL_ID).order_by('-timestamp')[:100]
             edited_ids = list(set([edit.resourceinstanceid for edit in recent_edits]))
-            resources = Resource.objects.filter(resourceinstanceid__in = edited_ids)
+            resources = Resource.objects.filter(resourceinstanceid__in=edited_ids)
             edit_type_lookup = {
                 'create': _('Resource Created'),
                 'delete': _('Resource Deleted'),
@@ -403,6 +410,7 @@ class ResourceEditLogView(BaseManagerView):
 
 @method_decorator(can_edit_resource_instance(), name='dispatch')
 class ResourceData(View):
+
     def get(self, request, resourceid=None, formid=None):
         if formid is not None:
             form = Form(resourceid=resourceid, formid=formid, user=request.user)
@@ -410,9 +418,9 @@ class ResourceData(View):
 
         return HttpResponseNotFound()
 
-
 @method_decorator(can_read_resource_instance(), name='dispatch')
 class ResourceTiles(View):
+
     def get(self, request, resourceid=None, include_display_values=True):
         datatype_factory = DataTypeFactory()
         nodeid = request.GET.get('nodeid', None)
@@ -445,25 +453,17 @@ class ResourceTiles(View):
 
 @method_decorator(can_read_resource_instance(), name='dispatch')
 class ResourceCards(View):
+
     def get(self, request, resourceid=None):
         cards = []
         if resourceid != None:
             graph = models.GraphModel.objects.get(graphid=resourceid)
             cards = [Card.objects.get(pk=card.cardid) for card in models.CardModel.objects.filter(graph=graph)]
-        return JSONResponse({'success':True, 'cards': cards})
+        return JSONResponse({'success': True, 'cards': cards})
 
-class ResourceReportData(View):
-    def get(self, request, resourceid=None):
-        resource_instance_id = request.GET.get('resourceid', None)
-        resource_instance = models.ResourceInstance.objects.get(pk = resource_instance_id)
-        active_report_count = models.Report.objects.filter(graph_id=resource_instance.graph_id, active=True).count()
-        if active_report_count > 0:
-            res = JSONResponse({'success': True})
-        else:
-            res = JSONResponse({'status':'false','message': _('A report template has not been activated for this resource type'),'title':_('No Report Available')}, status=500)
-        return res
 
 class ResourceDescriptors(View):
+
     def get(self, request, resourceid=None):
         if resourceid is not None:
             se = SearchEngineFactory().create()
@@ -480,13 +480,17 @@ class ResourceDescriptors(View):
 
         return HttpResponseNotFound()
 
+
 class ResourceReportView(MapBaseManagerView):
+
     def get(self, request, resourceid=None):
         lang = request.GET.get('lang', settings.LANGUAGE_CODE)
         resource = Resource.objects.get(pk=resourceid)
         displayname = resource.displayname
-        resource_models = models.GraphModel.objects.filter(isresource=True).exclude(isactive=False).exclude(pk=settings.SYSTEM_SETTINGS_RESOURCE_MODEL_ID)
-        related_resource_summary = [{'graphid':str(g.graphid), 'name':g.name, 'resources':[]} for g in resource_models]
+        resource_models = models.GraphModel.objects.filter(isresource=True).exclude(
+            isactive=False).exclude(pk=settings.SYSTEM_SETTINGS_RESOURCE_MODEL_ID)
+        related_resource_summary = [
+            {'graphid': str(g.graphid), 'name': g.name, 'resources': []} for g in resource_models]
         related_resources_search_results = resource.get_related_resources(lang=lang, start=0, limit=1000)
         related_resources = related_resources_search_results['related_resources']
         relationships = related_resources_search_results['resource_relationships']
@@ -498,30 +502,23 @@ class ResourceReportView(MapBaseManagerView):
                     relationship_summary = []
                     for relationship in relationships:
                         if rr['resourceinstanceid'] in (relationship['resourceinstanceidto'], relationship['resourceinstanceidfrom']):
-                            rr_type = resource_relationship_type_values[relationship['relationshiptype']] if relationship['relationshiptype'] in resource_relationship_type_values else relationship['relationshiptype']
+                            rr_type = resource_relationship_type_values[relationship['relationshiptype']] if relationship[
+                                'relationshiptype'] in resource_relationship_type_values else relationship['relationshiptype']
                             relationship_summary.append(rr_type)
-                    summary['resources'].append({'instance_id':rr['resourceinstanceid'],'displayname':rr['displayname'], 'relationships':relationship_summary})
+                    summary['resources'].append({'instance_id': rr['resourceinstanceid'], 'displayname': rr[
+                                                'displayname'], 'relationships': relationship_summary})
 
-        tiles = Tile.objects.filter(resourceinstance=resource)
-        try:
-           report = models.Report.objects.get(graph=resource.graph, active=True)
-        except models.Report.DoesNotExist:
-           report = None
+        tiles = Tile.objects.filter(resourceinstance=resource).order_by('sortorder')
 
         graph = Graph.objects.get(graphid=resource.graph_id)
-        forms = graph.form_set.filter(visible=True)
-        forms_x_cards = models.FormXCard.objects.filter(form__in=forms).order_by('sortorder')
-        cards = Card.objects.filter(nodegroup__parentnodegroup=None, graph=graph)
+        cards = Card.objects.filter(graph=graph).order_by('sortorder')
         permitted_cards = []
-        permitted_forms_x_cards = []
-        permitted_forms = []
         permitted_tiles = []
 
         perm = 'read_nodegroup'
 
         for card in cards:
             if request.user.has_perm(perm, card.nodegroup):
-                matching_forms_x_card = filter(lambda forms_x_card: card.nodegroup_id == forms_x_card.card.nodegroup_id, forms_x_cards)
                 card.filter_by_perm(request.user, perm)
                 permitted_cards.append(card)
 
@@ -530,8 +527,6 @@ class ResourceReportView(MapBaseManagerView):
                 tile.filter_by_perm(request.user, perm)
                 permitted_tiles.append(tile)
 
-        datatypes = models.DDataType.objects.all()
-        widgets = models.Widget.objects.all()
 
         try:
             map_layers = models.MapLayer.objects.all()
@@ -541,19 +536,27 @@ class ResourceReportView(MapBaseManagerView):
         except AttributeError:
             raise Http404(_("No active report template is available for this resource."))
 
+        cardwidgets = [widget for widgets in [card.cardxnodexwidget_set.order_by(
+            'sortorder').all() for card in permitted_cards] for widget in widgets]
+
+        datatypes = models.DDataType.objects.all()
+        widgets = models.Widget.objects.all()
         templates = models.ReportTemplate.objects.all()
+        card_components = models.CardComponent.objects.all()
 
         context = self.get_context_data(
             main_script='views/resource/report',
-            report=JSONSerializer().serialize(report),
             report_templates=templates,
             templates_json=JSONSerializer().serialize(templates, sort_keys=False, exclude=['name', 'description']),
-            forms=JSONSerializer().serialize(forms, sort_keys=False, exclude=['iconclass', 'subtitle']),
+            card_components=card_components,
+            card_components_json=JSONSerializer().serialize(card_components),
+            cardwidgets=JSONSerializer().serialize(cardwidgets),
             tiles=JSONSerializer().serialize(permitted_tiles, sort_keys=False),
-            forms_x_cards=JSONSerializer().serialize(forms_x_cards, sort_keys=False),
-            cards=JSONSerializer().serialize(permitted_cards, sort_keys=False, exclude=['is_editable', 'description', 'instructions', 'helpenabled', 'helptext', 'helptitle', 'ontologyproperty', 'widgets']),
-            datatypes_json=JSONSerializer().serialize(datatypes, exclude=['modulename', 'issearchable', 'configcomponent','configname', 'iconclass']),
-            geocoding_providers = geocoding_providers,
+            cards=JSONSerializer().serialize(permitted_cards, sort_keys=False, exclude=[
+                'is_editable', 'description', 'instructions', 'helpenabled', 'helptext', 'helptitle', 'ontologyproperty']),
+            datatypes_json=JSONSerializer().serialize(
+                datatypes, exclude=['modulename', 'issearchable', 'configcomponent', 'configname', 'iconclass']),
+            geocoding_providers=geocoding_providers,
             related_resources=JSONSerializer().serialize(related_resource_summary, sort_keys=False),
             widgets=widgets,
             map_layers=map_layers,
@@ -561,10 +564,11 @@ class ResourceReportView(MapBaseManagerView):
             map_sources=map_sources,
             graph_id=graph.graphid,
             graph_name=graph.name,
-            graph_json = JSONSerializer().serialize(graph, sort_keys=False, exclude=['functions', 'relatable_resource_model_ids', 'domain_connections', 'edges', 'is_editable', 'description', 'iconclass', 'subtitle', 'author']),
+            graph_json=JSONSerializer().serialize(graph, sort_keys=False, exclude=[
+                'functions', 'relatable_resource_model_ids', 'domain_connections', 'edges', 'is_editable', 'description', 'iconclass', 'subtitle', 'author']),
             resourceid=resourceid,
             displayname=displayname,
-         )
+        )
 
         if graph.iconclass:
             context['nav']['icon'] = graph.iconclass
@@ -575,12 +579,13 @@ class ResourceReportView(MapBaseManagerView):
 
         return render(request, 'views/resource/report.htm', context)
 
+
 @method_decorator(can_read_resource_instance(), name='dispatch')
 class RelatedResourcesView(BaseManagerView):
-    action=None
+    action = None
 
     def paginate_related_resources(self, related_resources, page, request):
-        total=related_resources['total']
+        total = related_resources['total']
         paginator, pages = get_paginator(request, related_resources, total, page, settings.RELATED_RESOURCES_PER_PAGE)
         page = paginator.page(page)
 
@@ -589,7 +594,8 @@ class RelatedResourcesView(BaseManagerView):
                 relationship['relationshiptype_label'] = relationship['relationshiptype_label'].rsplit('/')[-1]
             return relationship
 
-        related_resources['resource_relationships'] = [parse_relationshiptype_label(r) for r in related_resources['resource_relationships']]
+        related_resources['resource_relationships'] = [parse_relationshiptype_label(r) for r in related_resources[
+            'resource_relationships']]
 
         ret = {}
         ret['related_resources'] = related_resources
@@ -684,7 +690,7 @@ class RelatedResourcesView(BaseManagerView):
             Takes the graphid of a resource, finds the graphs root node, and returns the relatable graphids
             """
             nodes = models.Node.objects.filter(graph_id=graphid)
-            top_node = [node for node in nodes if node.istopnode==True][0]
+            top_node = [node for node in nodes if node.istopnode == True][0]
             relatable_resources = [str(node.graph_id) for node in top_node.get_relatable_resources()]
             return relatable_resources
 
@@ -701,12 +707,12 @@ class RelatedResourcesView(BaseManagerView):
             permitted = confirm_relationship_permitted(instanceid, root_resourceinstanceid[0])
             if permitted == True:
                 rr = models.ResourceXResource(
-                    resourceinstanceidfrom = Resource(root_resourceinstanceid[0]),
-                    resourceinstanceidto = Resource(instanceid),
-                    notes = notes,
-                    relationshiptype = relationship_type,
-                    datestarted = datefrom,
-                    dateended = dateto
+                    resourceinstanceidfrom=Resource(root_resourceinstanceid[0]),
+                    resourceinstanceidto=Resource(instanceid),
+                    notes=notes,
+                    relationshiptype=relationship_type,
+                    datestarted=datefrom,
+                    dateended=dateto
                 )
                 rr.save()
             else:

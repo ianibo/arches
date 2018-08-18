@@ -3,10 +3,12 @@ define([
     'underscore',
     'knockout',
     'knockout-mapping',
+    'models/card',
+    'models/card-widget',
     'arches',
     'require',
     'viewmodels/tile'
-], function($, _, ko, koMapping, arches, require) {
+], function($, _, ko, koMapping, CardModel, CardWidgetModel, arches, require) {
     /**
     * A viewmodel used for generic cards
     *
@@ -15,11 +17,11 @@ define([
     *
     * @param  {string} params - a configuration object
     */
-    var isChildSelected = function (parent) {
+    var isChildSelected = function(parent) {
         var childSelected = false;
-        var childrenKey = parent.tiles ? 'tiles' : 'cards';
+        var childrenKey = 'tileid' in parent ? 'cards': 'tiles';
         ko.unwrap(parent[childrenKey]).forEach(function(child) {
-            if (child.selected() || isChildSelected(child)){
+            if (child.selected && child.selected() || isChildSelected(child)) {
                 childSelected = true;
             }
         });
@@ -28,9 +30,9 @@ define([
 
     var doesChildHaveProvisionalEdits = function(parent) {
         var hasEdits = false;
-        var childrenKey = parent.tiles ? 'tiles' : 'cards';
+        var childrenKey = 'tileid' in parent ? 'cards': 'tiles';
         ko.unwrap(parent[childrenKey]).forEach(function(child) {
-            if (child.hasprovisionaledits() || doesChildHaveProvisionalEdits(child)){
+            if (child.hasprovisionaledits && child.hasprovisionaledits() || doesChildHaveProvisionalEdits(child)) {
                 hasEdits = true;
             }
         });
@@ -40,7 +42,7 @@ define([
     var updateDisplayName = function(resourceId, displayname) {
         $.get(
             arches.urls.resource_descriptors + resourceId(),
-            function (descriptors) {
+            function(descriptors) {
                 displayname(descriptors.displayname);
             }
         );
@@ -49,76 +51,80 @@ define([
     var CardViewModel = function(params) {
         var TileViewModel = require('viewmodels/tile');
         var self = this;
-        var selection = params.selection || ko.observable();
+        var hover = params.hover || ko.observable();
+        var scrollTo = params.scrollTo || ko.observable();
         var filter = params.filter || ko.observable();
         var loading = params.loading || ko.observable();
         var perms = ko.observableArray();
         var permsLiteral = ko.observableArray();
-        var nodes = _.filter(ko.unwrap(params.nodes), function (node) {
-            return ko.unwrap(node.nodegroup_id) === ko.unwrap(params.card.nodegroup_id);
-        }).map(function (node) {
-            node.configKeys = ko.observableArray(
-                _.map(node.config, function (val, key) {
-                    return key
-                })
-            );
-            node.config = koMapping.fromJS(node.config);
-            return node;
+        var nodegroups = params.graphModel.get('nodegroups');
+        var multiselect = params.multiselect || false;
+        var selection;
+        if (params.multiselect) {
+            selection = params.selection || ko.observableArray([]);
+        } else {
+            selection = params.selection || ko.observable();
+        }
+        var nodegroup = _.find(ko.unwrap(nodegroups), function(group) {
+            return ko.unwrap(group.nodegroupid) === ko.unwrap(params.card.nodegroup_id);
         });
-        var widgets = _.filter(params.cardwidgets, function (widget) {
-            return widget.card_id === params.card.cardid;
+
+        var cardModel = new CardModel({
+            data: _.extend(params.card, {
+                widgets: params.cardwidgets,
+                nodes: params.graphModel.get('nodes')
+            }),
+            datatypelookup: params.graphModel.get('datatypelookup'),
         });
-        _.each(ko.unwrap(nodes), function (node) {
-            var widget = _.find(widgets, function (widget) {
-                return widget.node_id === ko.unwrap(node.nodeid)
-            });
-            if (!widget) {
-                var datatype = _.find(params.datatypes, function (datatype) {
-                    return datatype.datatype === ko.unwrap(node.datatype);
-                });
-                if (datatype.defaultwidget_id) {
-                    var widgetData = _.find(params.widgets, function (widget) {
-                        return widget.widgetid === datatype.defaultwidget_id;
-                    });
-                    widget = {
-                        widget_id: datatype.defaultwidget_id,
-                        config: _.extend({
-                            label: ko.unwrap(node.name)
-                        }, widgetData.defaultconfig),
-                        label: ko.unwrap(node.name),
-                        node_id: ko.unwrap(node.nodeid),
-                        card_id: params.card.cardid,
-                        id: '',
-                        sortorder: ''
-                    }
-                    widgets.push(widget);
-                }
-            }
-            if (widget) {
+
+        var applySelectedComputed = function(widgets){
+            widgets.forEach(function(widget){
+                widget.parent = self;
                 widget.selected = ko.pureComputed({
-                    read: function () {
+                    read: function() {
                         return selection() === this;
                     },
-                    write: function (value) {
+                    write: function(value) {
                         if (value) {
                             selection(this);
                         }
                     },
                     owner: widget
                 });
-            }
+                widget.hovered = ko.pureComputed({
+                    read: function() {
+                        return hover() === this;
+                    },
+                    write: function(value) {
+                        if (value === true) {
+                            hover(this);
+                        }
+                        if (value === null) {
+                            hover(null);
+                        }
+                    },
+                    owner: widget
+                });
+            });
+        };
+
+        applySelectedComputed(cardModel.widgets());
+
+        cardModel.widgets.subscribe(function(widgets){
+            applySelectedComputed(widgets);
         });
 
-        var nodegroup = _.find(ko.unwrap(params.nodegroups), function(group) {
-            return ko.unwrap(group.nodegroupid) === ko.unwrap(params.card.nodegroup_id);
-        });
-        _.extend(this, params.card, nodegroup, {
-            widgets: widgets,
-            nodes: nodes,
+        _.extend(this, nodegroup, {
+            model: cardModel,
+            multiselect: params.multiselect,
+            widgets: cardModel.widgets,
             parent: params.tile,
-            expanded: ko.observable(true),
+            expanded: ko.observable(false),
             perms: perms,
             permsLiteral: permsLiteral,
+            scrollTo: ko.pureComputed(function() {
+                return scrollTo() === this;
+            }, this),
             highlight: ko.computed(function() {
                 var filterText = filter();
                 if (!filterText) {
@@ -134,10 +140,11 @@ define([
                     return (
                         params.tile ? (tile.parenttile_id === params.tile.tileid) : true
                     ) && ko.unwrap(tile.nodegroup_id) === ko.unwrap(params.card.nodegroup_id);
-                }).map(function (tile) {
+                }).map(function(tile) {
                     return new TileViewModel({
                         tile: tile,
                         card: self,
+                        graphModel: params.graphModel,
                         resourceId: params.resourceId,
                         displayname: params.displayname,
                         handlers: params.handlers,
@@ -146,24 +153,22 @@ define([
                         tiles: params.tiles,
                         provisionalTileViewModel: params.provisionalTileViewModel,
                         selection: selection,
+                        scrollTo: scrollTo,
                         loading: loading,
                         filter: filter,
-                        nodes: params.nodes,
                         cardwidgets: params.cardwidgets,
-                        datatypes: params.datatypes,
-                        widgets: params.widgets,
-                        nodegroups: ko.unwrap(params.nodegroups)
                     });
                 })
             ),
-            cards: _.filter(params.cards, function(card) {
-                var nodegroup = _.find(ko.unwrap(params.nodegroups), function(group) {
+            cards: ko.observableArray(_.filter(params.cards, function(card) {
+                var nodegroup = _.find(ko.unwrap(nodegroups), function(group) {
                     return ko.unwrap(group.nodegroupid) === ko.unwrap(card.nodegroup_id);
-                })
+                });
                 return ko.unwrap(nodegroup.parentnodegroup_id) === ko.unwrap(params.card.nodegroup_id);
             }).map(function(card) {
                 return new CardViewModel({
                     card: _.clone(card),
+                    graphModel: params.graphModel,
                     tile: null,
                     resourceId: params.resourceId,
                     displayname: params.displayname,
@@ -171,72 +176,101 @@ define([
                     cards: params.cards,
                     tiles: params.tiles,
                     selection: selection,
+                    multiselect: multiselect,
+                    scrollTo: scrollTo,
                     loading: loading,
                     filter: filter,
                     provisionalTileViewModel: params.provisionalTileViewModel,
-                    nodes: params.nodes,
                     cardwidgets: params.cardwidgets,
-                    datatypes: params.datatypes,
-                    widgets: params.widgets,
-                    nodegroups: ko.unwrap(params.nodegroups),
                     perms: perms,
                     permsLiteral: permsLiteral
                 });
-            }),
-            hasprovisionaledits: ko.computed(function(){
-                return _.filter(params.tiles, function(tile){
+            })),
+            hasprovisionaledits: ko.computed(function() {
+                return _.filter(params.tiles, function(tile) {
                     return (
                         params.tile ? (tile.parenttile_id === params.tile.tileid) : true
                     ) && ko.unwrap(tile.nodegroup_id) === ko.unwrap(params.card.nodegroup_id) && ko.unwrap(tile.provisionaledits);
-                }).length
+                }).length;
             }),
             selected: ko.pureComputed({
-                read: function () {
-                    return selection() === this;
+                read: function() {
+                    if (self.multiselect) {
+                        return _.contains(selection(), this);
+                    } else {
+                        return selection() === this;
+                    }
                 },
-                write: function (value) {
-                    if (value) {
+                write: function(value) {
+                    if (self.multiselect && value && _.contains(selection(), this) === false) {
+                        selection.push(this);
+                    } else if (self.multiselect && value && _.contains(selection(), this) === true) {
+                        selection.remove(this);
+                    }
+                    else if (value) {
                         selection(this);
                     }
                 },
                 owner: this
             }),
             canAdd: ko.pureComputed({
-                read: function () {
-                    return this.cardinality === 'n' || this.tiles().length === 0
+                read: function() {
+                    return this.cardinality === 'n' || this.tiles().length === 0;
                 },
                 owner: this
             }),
-            reorderTiles: function (e) {
+            reorderTiles: function() {
                 loading(true);
                 var tiles = _.map(self.tiles(), function(tile) {
                     return tile.getAttributes();
                 });
                 $.ajax({
-                    type: "POST",
+                    type: 'POST',
                     data: JSON.stringify({
                         tiles: tiles
                     }),
                     url: arches.urls.reorder_tiles,
-                    complete: function(response) {
+                    complete: function() {
                         loading(false);
                         updateDisplayName(params.resourceId, params.displayname);
                     }
                 });
             },
-            getNewTile: function () {
+            reorderCards: function() {
+                loading(true);
+                var cards = _.map(self.cards(), function(card, i) {
+                    card.model.get('sortorder')(i);
+                    return {
+                        id: card.model.id,
+                        name: card.model.get('name')(),
+                        sortorder: i
+                    };
+                });
+                $.ajax({
+                    type: 'POST',
+                    data: JSON.stringify({
+                        cards: cards
+                    }),
+                    url: arches.urls.reorder_cards,
+                    complete: function() {
+                        loading(false);
+                    }
+                });
+            },
+            getNewTile: function() {
                 return new TileViewModel({
                     tile: {
                         tileid: '',
                         resourceinstance_id: params.resourceId(),
-                        nodegroup_id: ko.unwrap(self.nodegroup_id),
+                        nodegroup_id: ko.unwrap(self.model.nodegroup_id),
                         parenttile_id: self.parent ? self.parent.tileid : null,
-                        data: _.reduce(self.widgets, function (data, widget) {
-                            data[widget.node_id] = null;
+                        data: _.reduce(self.widgets(), function(data, widget) {
+                            data[widget.node_id()] = null;
                             return data;
                         }, {})
                     },
                     card: self,
+                    graphModel: params.graphModel,
                     resourceId: params.resourceId,
                     displayname: params.displayname,
                     handlers: params.handlers,
@@ -244,17 +278,15 @@ define([
                     cards: params.cards,
                     tiles: params.tiles,
                     selection: selection,
+                    scrollTo: scrollTo,
                     filter: filter,
                     provisionalTileViewModel: params.provisionalTileViewModel,
                     loading: loading,
-                    nodes: params.nodes,
                     cardwidgets: params.cardwidgets,
-                    datatypes: params.datatypes,
-                    widgets: params.widgets,
-                    nodegroups: ko.unwrap(params.nodegroups)
                 });
             }
         });
+
         this.isChildSelected = ko.computed(function() {
             return isChildSelected(this);
         }, this);
@@ -262,6 +294,18 @@ define([
             return doesChildHaveProvisionalEdits(this);
         }, this);
 
+        var expandParents = function(item) {
+            if (item.parent) {
+                item.parent.expanded(true);
+                expandParents(item.parent);
+            }
+        };
+        this.highlight.subscribe(function(highlight) {
+            if (highlight) {
+                this.expanded(true);
+                expandParents(this);
+            }
+        }, this);
     };
     return CardViewModel;
 });

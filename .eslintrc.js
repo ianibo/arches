@@ -9,10 +9,17 @@ module.exports = {
         // allow async-await
         'generator-star-spacing': 'off',
         // allow debugger during development
-        'no-debugger': process.env.NODE_ENV === 'production' ? 'error' : 'off'
+        'no-debugger': process.env.NODE_ENV === 'production' ? 'error' : 'off',
+        "camelcase": [2, {"properties": "always"}]
     },
     "globals": {
         "define": false,
-        "require": false
+        "require": false,
+        "window": false,
+        "console": false,
+        "history": false,
+        "location": false,
+        "Promise": false,
+        "setTimeout": false
     }
 };

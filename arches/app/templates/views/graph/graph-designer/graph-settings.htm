@@ -7,13 +7,18 @@
             <div class="settings-panel-heading">
                 <div class="graph-designer-title">
                     <i data-bind='css: graph.iconclass'></i><div class="name" data-bind='text: graph.name'></div>
-                    <span class="graph-crm-class"> (CIDOC CRM v6.2, E22 Man Made Object)</span>
+                    <span class="graph-crm-class" data-bind="if: graph.ontology_id()">
+                        (
+                        <span data-bind="text: graph.ontology().name"></span>,
+                        <span data-bind="text: graphSettingsViewModel.ontologyClassFriendlyName"></span>
+                        )
+                    </span>
                 </div>
             </div>
 
             <!-- Settings Forms -->
             <div class="">
-                <div class="graph-designer-header">{% trans 'Resource Model Identifiers' %}</div>
+                <div class="graph-designer-header" data-bind="text: graph.isresource() ? '{% trans 'Resource Model Identifiers' %}' : '{% trans 'Branch Identifiers' %}' "></div>
                 <div id="cards" class="graph-settings-panel-body fade in">
                     <form class="widgets">
                         <div class="row widget-container">
@@ -21,12 +26,11 @@
                                 <div class="relative">
                                     <label class="col-xs-12 control-label widget-input-label">
                                         {% trans "Name" %}
-
                                     </label>
                                 </div>
 
                                 <div class="col-xs-12">
-                                    <input placeholder="{% trans "Name" %}" class="form-control input-lg widget-input" data-bind="value:graph.name, valueUpdate: 'keyup'">
+                                    <input placeholder="{% trans "Name" %}" class="form-control input-md widget-input" data-bind="value:graph.name, valueUpdate: 'keyup'">
                                 </div>
                             </div>
                         </div>
@@ -38,7 +42,7 @@
                                 </div>
 
                                 <div class="col-xs-12">
-                                    <input placeholder="{% trans "Subtitle" %}" class="form-control input-lg widget-input" data-bind="value:graph.subtitle, valueUpdate: 'keyup'">
+                                    <input placeholder="{% trans "Subtitle" %}" class="form-control input-md widget-input" data-bind="value:graph.subtitle, valueUpdate: 'keyup'">
                                 </div>
                             </div>
                         </div>
@@ -93,6 +97,40 @@
                             </div>
                         </div>
 
+                        <!-- ko ifnot: graph.isresource() -->
+                        <div class="row widget-container">
+                            <div class="form-group">
+                                <div class="relative">
+                                    <label class="col-xs-12 control-label widget-input-label">
+                                        {% trans "Root Node Data Type" %}
+                                    </label>
+                                </div>
+
+                                <div class="col-xs-12 crm-selector">
+                                    <select class="design" data-bind="value: graphSettingsViewModel.node().datatype, options: datatypes, optionsCaption: '{% trans "Choose a data type" %}', chosen: {disable_search_threshold: 10, width: '500px'}"></select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row widget-container graph-settings-switch">
+                            <div class="form-group">
+                                <div class="relative">
+                                    <label class="col-xs-12 control-label widget-input-label">
+                                        <span class="switch switch-small arches-switch on disabled"><small></small></span>
+                                    </label>
+                                </div>
+                                <div class="col-xs-12">
+                                    <p class="control-label graph-settings-switch-label">
+                                        <span>{% trans "Make card" %}</span>
+                                    </p>
+                                    <span class="graph-settings-switch-subtitle">
+                                        {% trans "Data from nodes not collected in other cards will be collected in the root card's form section" %}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- /ko -->
+                        <!-- ko if: graph.isresource() -->
                         <div class="row widget-container">
                             <div class="form-group">
                                 <div class="relative">
@@ -111,6 +149,7 @@
                                 </div>
                             </div>
                         </div>
+                        <!-- /ko -->
                     </form>
                 </div>
 
@@ -125,7 +164,7 @@
                                 </div>
 
                                 <div class="col-xs-12">
-                                    <input placeholder="{% trans "Author name" %}" class="form-control input-lg widget-input" data-bind="value:graph.author, valueUpdate: 'keyup'">
+                                    <input placeholder="{% trans "Author name" %}" class="form-control input-md widget-input" data-bind="value:graph.author, valueUpdate: 'keyup'">
                                 </div>
                             </div>
                         </div>
@@ -141,6 +180,7 @@
                                 </div>
                             </div>
                         </div>
+                        <!-- ko if: graph.isresource() -->
                         <div class="row widget-container">
                             <div class="form-group">
                                 <div class="relative">
@@ -148,10 +188,11 @@
                                 </div>
 
                                 <div class="col-xs-12">
-                                    <textarea placeholder="{% trans "URI to a JSON-LD Context Object or a Raw Context Object or Array of Context Objects" %}" class="form-control input-lg widget-input" data-bind="textInput:graph.jsonldcontext"></textarea>
+                                    <textarea placeholder="{% trans "URI to a JSON-LD Context Object or a Raw Context Object or Array of Context Objects" %}" class="form-control input-md widget-input" data-bind="textInput:graph.jsonldcontext"></textarea>
                                 </div>
                             </div>
                         </div>
+                        <!-- /ko -->
                     </form>
                 </div>
 
@@ -159,7 +200,7 @@
                 <div class="graph-settings-panel-body fade in">
 
                     <form class="widgets">
-
+                        <!-- ko if: graph.isresource() -->
                         <div class="row widget-container">
                             <div class="form-group">
 
@@ -168,13 +209,13 @@
                                 </div>
 
                                 <div class="colorpicker-component input-group" id="cp1">
-                                    <input placeholder="{% trans " Map Feature Color " %}" class="form-control input-lg widget-input" data-bind="colorPicker: {color: graph.color, format:'rgba', container: '#cp1'}">
+                                    <input placeholder="{% trans " Map Feature Color " %}" class="form-control input-md widget-input" data-bind="colorPicker: {color: graph.color, format:'rgba', container: '#cp1'}">
                                     <span class="input-group-addon"><i class="ion-stop resource-color-swatch" data-bind="style: {color: graph.color}"></i></span>
                                 </div>
 
                             </div>
                         </div>
-
+                        <!-- /ko -->
                         <div class=" row widget-container">
                             <div class="form-group">
 

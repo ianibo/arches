@@ -3,33 +3,36 @@
 <div class="jstree jstree-default">
     <div class="header">
         <div class="list-filter" data-bind="" style="text-align: center;">
-            <input type="text" class="form-control" style="width: 100%;" placeholder="{% trans 'Find a card...' %}" data-bind="textInput: filter">
+            <input type="text" class="form-control" style="width: 100%;" placeholder="{% trans 'Find a card...' %}" data-bind="textInput: filter, event: {keypress: filterEnterKeyHandler}">
 
             <!-- Clear Search -->
             <span class="clear-node-search" data-bind="visible: filter().length > 0, click: function() { filter(''); }" style="top: 8px;"><i class="fa fa-times-circle"></i></span>
         </div>
-        <div style="text-align: center;">
-            <a data-bind="click: expandAll" style="cursor:pointer;">Expand all</a>
-            <a data-bind="click: collapseAll" style="padding-left:30px; cursor:pointer;">Collapse all</a>
+        <div style="">
+            <a data-bind="click: expandAll" style="cursor:pointer;">{% trans 'Expand' %}</a>
+            <a data-bind="click: collapseAll" style="padding-left: 10px; cursor:pointer;">{% trans 'Collapse' %}</a>
         </div>
     </div>
-    <div class="left-panel-overflow">
+    <div class="left-panel-overflow designer-card-tree">
         <ul class="jstree-container-ul jstree-children" aria-expanded="true">
             <li role="treeitem" class="jstree-node" data-bind="css: {'jstree-open': rootExpanded, 'jstree-closed' : !rootExpanded()}">
                 <i class="jstree-icon jstree-ocl" role="presentation" data-bind="click: function(){rootExpanded(!rootExpanded())}"></i>
-                <a class="jstree-anchor" href="#" tabindex="-1">
+                <a class="jstree-anchor" href="#" tabindex="-1" data-bind="click: function () { selection('root'); }, css: {'jstree-clicked': selection() === 'root'}">
                     <strong>
-                        <i data-bind="css: graphiconclass" role="presentation"></i>
+                        <i data-bind="css: (graphiconclass() != (null || '') ? graphiconclass() : 'fa fa-question')" role="presentation"></i>
                         <span data-bind="text: graphname"></span>
                     </strong>
+                     {% trans "(edit report)" %}
                 </a>
                 <!-- ko foreach: { data: [$data], as: 'self' } -->
-                <ul class="jstree-children" aria-expanded="true" data-bind="foreach: {
+                <ul class="jstree-children card-designer-tree" aria-expanded="true" data-bind="sortable: {
                     data: topCards,
-                    as: 'card'
+                    as: 'card',
+                    beforeMove: beforeMove,
+                    afterMove: reorderCards
                 }">
-                    <!-- ko component: {
-                        name: self.cardComponentLookup[card.component_id].componentname,
+                    <div data-bind="component: {
+                        name: self.cardComponentLookup[card.model.component_id()].componentname,
                         params: {
                             state: 'designer-tree',
                             card: card,
@@ -37,7 +40,9 @@
                             loading: self.loading,
                             form: self
                         }
-                    } --> <!-- /ko -->
+                    }, css: {
+                        'jstree-last': $index() === ($parent.topCards().length - 1)
+                    }"></div>
                 </ul>
                 <!-- /ko -->
             </li>
